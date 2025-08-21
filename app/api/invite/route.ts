@@ -1,53 +1,39 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { Resend } from "resend";
 
-// Force a Node.js Lambda (Resend SDK does not run on Edge)
-export const runtime = "nodejs";
-// Ensure this doesn't get cached between invocations
-export const dynamic = "force-dynamic";
+export const runtime = "nodejs"; // important for email libs to work on Vercel
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-function isEmail(v: unknown): v is string {
-  return typeof v === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-}
-
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({} as any));
-    const email = body?.email;
+    const { email } = await req.json();
 
-    if (!isEmail(email)) {
-      return NextResponse.json({ ok: false, error: "Invalid email" }, { status: 400 });
+    if (!email || typeof email !== "string") {
+      return NextResponse.json({ error: "Invalid email" }, { status: 400 });
     }
 
-    const to = process.env.INVITE_TO_EMAIL;
-    if (!to) {
-      console.error("INVITE_TO_EMAIL is missing");
-      return NextResponse.json({ ok: false, error: "Server misconfigured" }, { status: 500 });
+    if (!process.env.RESEND_API_KEY) {
+      return NextResponse.json({ error: "Missing API key" }, { status: 500 });
     }
 
-    // If your custom domain isn’t verified in Resend yet, set RESEND_USE_FALLBACK=1
-    // and we’ll send from onboarding@resend.dev to prove the flow.
-    const useFallback = process.env.RESEND_USE_FALLBACK === "1";
-    const from = useFallback ? "onboarding@resend.dev" : "Bobbi <welcome@yourbobbi.io>";
-
-    const result = await resend.emails.send({
-      from,
-      to,
-      subject: `New invite request: ${email}`,
-      text: `Please add ${email} to the early‑access list.`,
-      headers: { "X-Entity-Ref-ID": `invite-${Date.now()}` },
+    const data = await resend.emails.send({
+      from: "Bobbi <invite@yourbobbi.io>",
+      to: email,
+      subject: "You’re on the list 🎉",
+      html: `<p>Thanks for requesting early access to Bobbi. We'll be in touch soon!</p>`,
     });
 
-    if ((result as any)?.error) {
-      console.error("Resend error:", (result as any).error);
-      return NextResponse.json({ ok: false, error: "Email send failed" }, { status: 500 });
+    if (data.error) {
+      return NextResponse.json({ error: data.error.message }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {
-    console.error("Invite API failed:", err?.message || err);
-    return NextResponse.json({ ok: false, error: "Unexpected error" }, { status: 500 });
+    console.error("Invite API error:", err);
+    return NextResponse.json(
+      { error: err?.message || "Unexpected error" },
+      { status: 500 }
+    );
   }
 }
