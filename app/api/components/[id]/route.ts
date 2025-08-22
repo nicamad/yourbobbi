@@ -1,19 +1,26 @@
-import { NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabase';
+import { NextResponse } from "next/server";
+import { createServerClient } from "@/lib/supabase";
 
-type Params = { params: { id: string } };
-
-export async function DELETE(_req: Request, { params }: Params) {
+export async function DELETE(
+  _req: Request,
+  ctx: { params: { id: string } }
+) {
   try {
-    const id = params?.id;
-    if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+    const id = ctx.params.id;
+    if (!id) {
+      return NextResponse.json({ error: "Missing component id" }, { status: 400 });
+    }
 
-    const sb = supabaseServer();
-    const { error } = await sb.from('components').delete().eq('id', id);
+    const supabase = createServerClient();
+    const { error } = await supabase.from("components").delete().eq("id", id);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Unexpected error' }, { status: 500 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unexpected error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

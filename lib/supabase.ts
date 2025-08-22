@@ -1,27 +1,25 @@
-import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient as _createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
 
-/**
- * Browser client (public anon key). Use in client components only.
- */
-export function createClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  if (!url || !key) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY');
-  }
-  return createSupabaseClient(url, key);
+const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+/** Client for browser / client components (uses ANON key) */
+export function createBrowserClient(): SupabaseClient {
+  return _createSupabaseClient(URL, ANON, {
+    auth: { persistSession: true, autoRefreshToken: true },
+  });
 }
 
-/**
- * Server client (service role). Use ONLY in server code (API routes, actions).
- */
-export function supabaseServer(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  if (!url || !key) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
-  }
-  return createSupabaseClient(url, key);
+/** Client for server-only contexts (API routes, server actions); prefers SERVICE key */
+export function createServerClient(): SupabaseClient {
+  const key = SERVICE ?? ANON; // fall back safely if service key not present (dev)
+  return _createSupabaseClient(URL, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
-export { createSupabaseClient }; // in case anything imports this symbol
+/* --- Friendly aliases to match any imports you've used earlier --- */
+export { createBrowserClient as createClient };     // some files import { createClient }
+export { createServerClient as supabaseServer };    // some files import { supabaseServer }
+export default createServerClient;                  // default also available if used
