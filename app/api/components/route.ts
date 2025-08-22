@@ -1,56 +1,38 @@
-import { NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabase';
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase";
 
-// TODO: replace with real auth. For MVP you can pass X-Mock-User-Id from the client or set NEXT_PUBLIC_MOCK_USER_ID.
-async function getUserId(req: Request) {
-  const headerId = req.headers.get('x-mock-user-id');
-  if (headerId) return headerId;
-  const envId = process.env.NEXT_PUBLIC_MOCK_USER_ID;
-  if (envId) return envId;
-  throw new Error('Unauthenticated');
-}
-
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    const userId = await getUserId(req);
-    const supabase = supabaseServer();
+    const supabase = createClient({ service: true });
     const { data, error } = await supabase
-      .from('components')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: true });
-    if (error) throw error;
-    return NextResponse.json({ ok: true, components: data });
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: err.message }, { status: 401 });
+      .from("components")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, components: data ?? [] });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message ?? "Unexpected error" }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const userId = await getUserId(req);
-    const { type, title, dataSource, settings } = await req.json();
-
-    if (!type || !title || !dataSource) {
-      return NextResponse.json({ ok: false, error: 'Missing fields' }, { status: 400 });
-    }
-
-    const supabase = supabaseServer();
+    const body = await req.json(); // { type, settings, position }
+    const supabase = createClient({ service: true });
     const { data, error } = await supabase
-      .from('components')
+      .from("components")
       .insert({
-        user_id: userId,
-        type,
-        title,
-        data_source: dataSource,
-        settings: settings ?? {},
+        type: body.type,
+        settings: body.settings ?? {},
+        position: body.position ?? { x: 0, y: 0, w: 4, h: 3 },
       })
       .select()
       .single();
 
-    if (error) throw error;
-    return NextResponse.json({ ok: true, component: data });
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: err.message }, { status: 401 });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, component: data }, { status: 201 });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message ?? "Unexpected error" }, { status: 500 });
   }
 }
